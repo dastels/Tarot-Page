@@ -88,7 +88,6 @@ ratio = card_image.width.to_f / card_image.height.to_f
 
 puts "Card width: #{card_image.width}, Card height: #{card_image.height}, Ratio: #{ratio}"
 
-pdf.delete_page(0)
 
 # compute rows & columns
 if $config[:rows].nil? and $config[:cols].nil?
@@ -121,6 +120,13 @@ card_height = (card_width / ratio).floor
 
 cards = ((1..78).collect {|card_number| [card_number] * $config[:dups]}).flatten
 
+pdf.delete_page(0)
+pdf.delete_page(0)
+pdf.delete_page(0)
+pdf.start_new_page
+
+card_on_page = -1
+
 cards.each_with_index do |card_number, card_index|
 
   card = "./%s/%s-%04d.jpg" % [$config[:tarot], $config[:tarot], card_number]
@@ -133,9 +139,13 @@ cards.each_with_index do |card_number, card_index|
 
   if card_on_page == cards_per_page - 1 # is the page full?
     pdf.start_new_page
+    card_on_page = -1
   end
 end
 
+if card_on_page == -1
+  pdf.delete_page(-1)
+end
 
 # write the output file
 output_file = output_filename.nil? ? "#{$config[:tarot]}-#{$config[:rows]}x#{$config[:cols]}-#{$config[:dups]}.pdf" : output_filename
