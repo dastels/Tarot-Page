@@ -22,7 +22,7 @@ def process_args
     o.separator 'other options:'
     o.bool '-v', '--verbose', 'show informational output', default: false
     o.on '--version', 'print the version number' do
-      puts "0.0.1"
+      puts "0.0.2"
       exit
     end
     o.on '-?', '--help', 'print options' do
