@@ -41,6 +41,12 @@ end
 $config, output_filename, $verbose = process_args
 
 
+def make_image_name(deck, card_number)
+  "./%s_images/%s-%04d.jpg" % [deck, deck, card_number]
+end
+
+
+
 puts $config if $verbose
 
 if $config[:tarot].nil?
@@ -82,12 +88,11 @@ pdf = Prawn::Document.new(page_size: [width_pt, height_pt], margin: 0)
 pdf.stroke_color('000000')
 pdf.fill_color('000000')
 
-card_name = "./#{$config[:tarot]}/#{$config[:tarot]}-0001.jpg"
+card_name = make_image_name($config[:tarot], 1)
 card_image = pdf.image(card_name)
 ratio = card_image.width.to_f / card_image.height.to_f
 
 puts "Card width: #{card_image.width}, Card height: #{card_image.height}, Ratio: #{ratio}"
-
 
 # compute rows & columns
 if $config[:rows].nil? and $config[:cols].nil?
@@ -129,7 +134,7 @@ card_on_page = -1
 
 cards.each_with_index do |card_number, card_index|
 
-  card = "./%s/%s-%04d.jpg" % [$config[:tarot], $config[:tarot], card_number]
+  card = make_image_name($config[:tarot], card_number)
 
   card_on_page = card_index % cards_per_page
   r = card_on_page / $config[:cols]
