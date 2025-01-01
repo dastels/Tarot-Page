@@ -10,9 +10,10 @@ def process_args
   cmdline_config = {}
 
   opts = Slop.parse(banner: "usage: #{$0} [options]") do |o|
+    o.string '--dir', 'output directory (default: current directory)', default: ''
     o.string '-f', '--file', 'output filename'
     o.string '-p', '--page-size', 'page size, either a standard size (eg. A4) or <width>x<height> in mm or in (eg. 9inx12in) (default A4)', default: 'LETTER'
-    o.string '-o', '--orientation', 'portrait or landscape, not valid with custom widthxheight page size (default: landscape)', default: 'portrait'
+    o.string '-o', '--orientation', 'portrait or landscape, not valid with custom widthxheight page size (default landscape)', default: 'portrait'
     o.string '-t', '--tarot', 'the directory name of the collection of tarot card images (required)'
     o.integer '-d', '--dups', 'number of duplicates of each card (default 1)', default: 1
     o.integer '-c', '--cols', 'number of columns of cards.'
@@ -31,14 +32,14 @@ def process_args
     end
   end
 
-  [:page_size, :orientation, :tarot, :cols, :rows, :dups].each do |k|
+  [:dir, :file, :page_size, :orientation, :tarot, :cols, :rows, :dups, :verbose].each do |k|
     cmdline_config[k] = opts[k] unless opts[k].nil?
   end
 
-  return cmdline_config, opts[:file], opts[:verbose]
+  return opts
 end
 
-$config, output_filename, $verbose = process_args
+$config = process_args
 
 
 def make_image_name(deck, card_number)
@@ -47,7 +48,7 @@ end
 
 
 
-puts $config if $verbose
+puts $config if $config[:verbose]
 
 if $config[:tarot].nil?
   puts "Tarot deck required"
@@ -78,7 +79,7 @@ else
     width_unit = matches[2]
     height = matches[3].to_i
     height_unit = matches[4]
-    puts "page size: #{width}#{width_unit} x #{height}#{height_unit}" if $verbose
+    puts "page size: #{width}#{width_unit} x #{height}#{height_unit}" if $config[:verbose]
     width_pt = width_unit == 'in' ? in2pt(width) : mm2pt(width)
     height_pt = height_unit == 'in' ? in2pt(height) : mm2pt(height)
   end
@@ -113,6 +114,7 @@ elsif $config[:cols].nil?
 end
 
 puts "rows: #{$config[:rows]}, cols: #{$config[:cols]}"
+puts "#{$config[:dups]} copies of each card"
 
 
 cards_per_page = $config[:rows] * $config[:cols]
@@ -125,10 +127,11 @@ card_height = (card_width / ratio).floor
 
 cards = ((1..78).collect {|card_number| [card_number] * $config[:dups]}).flatten
 
+pdf.delete_page(0)              # clean out spurious pages
 pdf.delete_page(0)
 pdf.delete_page(0)
-pdf.delete_page(0)
-pdf.start_new_page
+
+pdf.start_new_page              # start a fresh page
 
 card_on_page = -1
 
@@ -148,13 +151,12 @@ cards.each_with_index do |card_number, card_index|
   end
 end
 
-if card_on_page == -1
+if card_on_page == -1           # if all pages are full, there'll be an empty one at the end
   pdf.delete_page(-1)
 end
 
 # write the output file
-output_file = output_filename.nil? ? "#{$config[:tarot]}-#{$config[:rows]}x#{$config[:cols]}-#{$config[:dups]}.pdf" : output_filename
-
-puts "Writing to #{output_file}" if $verbose
+output_file = File.join($config[:dir], $config[:file].nil? ? "#{$config[:tarot]}-#{$config[:rows]}x#{$config[:cols]}-#{$config[:dups]}.pdf" : $config[:file])
+puts "Writing to #{output_file}" if $config[:verbose]
 
 pdf.render_file(output_file)
