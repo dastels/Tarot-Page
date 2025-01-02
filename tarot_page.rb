@@ -18,7 +18,9 @@ def process_args
     o.integer '-d', '--dups', 'number of duplicates of each card (default 1)', default: 1
     o.integer '-c', '--cols', 'number of columns of cards.'
     o.integer '-r', '--rows', 'number of rows of cards'
-    o.separator 'Only one of cols/rows can be specified, and one must be specified'
+    o.string '-w', '--width', 'width of cards: in or mm'
+    o.string '-h', '--height', 'height of cards: in or mm'
+    o.separator 'Only one of cols/rows/width/height can be specified, and one must be specified'
     o.separator ''
     o.separator 'other options:'
     o.bool '-v', '--verbose', 'show informational output', default: false
@@ -32,23 +34,15 @@ def process_args
     end
   end
 
-  [:dir, :file, :page_size, :orientation, :tarot, :cols, :rows, :dups, :verbose].each do |k|
-    cmdline_config[k] = opts[k] unless opts[k].nil?
-  end
-
   return opts
 end
 
 $config = process_args
 
-
 def make_image_name(deck, card_number)
   "./%s_images/%s-%04d.jpg" % [deck, deck, card_number]
 end
 
-
-
-puts $config if $config[:verbose]
 
 if $config[:tarot].nil?
   puts "Tarot deck required"
@@ -60,11 +54,11 @@ if PDF::Core::PageGeometry::SIZES.include?($config[:page_size].upcase)
   page_size = PDF::Core::PageGeometry::SIZES[$config[:page_size].upcase]
   case $config[:orientation]
   when 'portrait'
-    width_pt = page_size[0]
-    height_pt = page_size[1]
+    page_width_pt = page_size[0]
+    page_height_pt = page_size[1]
   when 'landscape'
-    width_pt = page_size[1]
-    height_pt = page_size[0]
+    page_width_pt = page_size[1]
+    page_height_pt = page_size[0]
   else
     puts "Bad orientation: #{$config[:orientation]}"
     exit
@@ -80,12 +74,13 @@ else
     height = matches[3].to_i
     height_unit = matches[4]
     puts "page size: #{width}#{width_unit} x #{height}#{height_unit}" if $config[:verbose]
-    width_pt = width_unit == 'in' ? in2pt(width) : mm2pt(width)
-    height_pt = height_unit == 'in' ? in2pt(height) : mm2pt(height)
+    page_width_pt = width_unit == 'in' ? in2pt(width) : mm2pt(width)
+    page_height_pt = height_unit == 'in' ? in2pt(height) : mm2pt(height)
   end
 end
 
-pdf = Prawn::Document.new(page_size: [width_pt, height_pt], margin: 0)
+puts "Page size: #{page_width_pt}x#{page_height_pt}" if $config[:verbose]
+pdf = Prawn::Document.new(page_size: [page_width_pt, page_height_pt], margin: 0)
 pdf.stroke_color('000000')
 pdf.fill_color('000000')
 
@@ -93,19 +88,54 @@ card_name = make_image_name($config[:tarot], 1)
 card_image = pdf.image(card_name)
 ratio = card_image.width.to_f / card_image.height.to_f
 
-puts "Card width: #{card_image.width}, Card height: #{card_image.height}, Ratio: #{ratio}"
+puts "Card image width: #{card_image.width}px, Card image height: #{card_image.height}px, Ratio: #{ratio}" if $config[:verbose]
 
 # compute rows & columns
-if $config[:rows].nil? and $config[:cols].nil?
-  puts 'Must specify one of rows or columns'
+
+number_specified = [:rows, :cols, :width, :height].inject(0) {|count, sym| count + ($config[sym].nil? ? 0 : 1)}
+
+if $config[:verbose]
+  puts "Card grid specifications:"
+  [:rows, :cols, :width, :height].each {|sym| puts "  #{sym.to_s}: #{$config[sym].nil? ? 'nil' : $config[sym]}" }
+end
+
+if number_specified == 0
+  puts 'Must specify one of rows/cols/width/height'
+  exit
+elsif number_specified > 1
+  puts 'Must specify only one of rows/cols/width/height'
   exit
 end
 
-if !$config[:rows].nil? and !$config[:cols].nil?
-  puts 'Must specify only one of rows or columns'
-  exit
+# process card width or height to get columns or rows
+
+if !$config[:width].nil?
+  matches = $config[:width].downcase.match(/(\d+)(in|mm)?/)
+  if matches.nil?
+    puts "Bad card width: #{$config[:width]}"
+    exit
+  else
+    width = matches[1].to_i
+    width_unit = matches[2]
+    card_width_pt = width_unit == 'in' ? in2pt(width) : mm2pt(width)
+    puts "Card width: #{card_width_pt}" if $config[:verbose]
+    $config[:cols] = (page_width_pt / card_width_pt).floor
+    puts "Computed columns: #{$config[:cols]}"
+  end
+elsif !$config[:height].nil?
+  matches = $config[:height].downcase.match(/(\d+)(in|mm)?/)
+  if matches.nil?
+    puts "Bad card height: #{$config[:height]}"
+    exit
+  else
+    height = matches[1].to_i
+    height_unit = matches[2]
+    card_height_pt = height_unit == 'in' ? in2pt(height) : mm2pt(height)
+    $config[:rows] = (page_height_pt / card_height_pt).floor
+  end
 end
 
+# based on known columns or rows, compute the other
 
 if $config[:rows].nil?
   $config[:rows] = ($config[:cols] * ratio).ceil
@@ -122,7 +152,7 @@ cards_per_page = $config[:rows] * $config[:cols]
 puts "Cards per page: #{cards_per_page}"
 
 
-card_width = (width_pt / $config[:cols]).floor
+card_width = (page_width_pt / $config[:cols]).floor
 card_height = (card_width / ratio).floor
 
 cards = ((1..78).collect {|card_number| [card_number] * $config[:dups]}).flatten
