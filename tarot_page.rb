@@ -140,7 +140,7 @@ end
 if $config[:rows].nil?
   $config[:rows] = ($config[:cols] * ratio).ceil
 elsif $config[:cols].nil?
-  $config[:cols] = ($config[:rows] / ratio).floor
+  $config[:cols] = ($config[:rows] / ratio).ceil
 end
 
 puts "rows: #{$config[:rows]}, cols: #{$config[:cols]}"
