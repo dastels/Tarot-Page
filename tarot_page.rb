@@ -6,6 +6,10 @@ require 'slop'
 
 include Prawn::Measurements
 
+def pt2in(pt)
+  pt / 72.0
+end
+  
 def process_args
   cmdline_config = {}
 
@@ -79,6 +83,8 @@ else
   end
 end
 
+border = mm2pt(10)              # 10mm border on all sides
+
 puts "Page size: #{page_width_pt}x#{page_height_pt}" if $config[:verbose]
 pdf = Prawn::Document.new(page_size: [page_width_pt, page_height_pt], margin: 0)
 pdf.stroke_color('000000')
@@ -86,7 +92,7 @@ pdf.fill_color('000000')
 
 card_name = make_image_name($config[:tarot], 1)
 card_image = pdf.image(card_name)
-ratio = card_image.width.to_f / card_image.height.to_f
+ratio = (card_image.width.to_f / card_image.height.to_f).round(2)
 
 puts "Card image width: #{card_image.width}px, Card image height: #{card_image.height}px, Ratio: #{ratio}" if $config[:verbose]
 
@@ -132,15 +138,31 @@ elsif !$config[:height].nil?
     height_unit = matches[2]
     card_height_pt = height_unit == 'in' ? in2pt(height) : mm2pt(height)
     $config[:rows] = (page_height_pt / card_height_pt).floor
+    puts "card_height: #{card_height_pt} pt, rows: #{$config[:rows]}" if $config[:verbose]
   end
 end
 
 # based on known columns or rows, compute the other
 
 if $config[:rows].nil?
-  $config[:rows] = ($config[:cols] * ratio).ceil
+  $config[:rows] = ($config[:cols] * ratio).floor
 elsif $config[:cols].nil?
-  $config[:cols] = ($config[:rows] / ratio).ceil
+  $config[:cols] = ($config[:rows] / ratio).floor
+end
+
+# card_width = (page_width_pt / $config[:cols]).floor
+# card_height = (card_width / ratio).floor
+
+card_height = (page_height_pt / $config[:rows]).floor
+card_width = (card_height * ratio).floor
+
+while card_height * $config[:rows] > page_height_pt - (border * 2)
+  $config[:rows] -= 1
+  puts "rows now #{$config[:rows]}" if $config[:verbose]
+end
+while card_width * $config[:cols] > page_width_pt - (border * 2)
+  $config[:cols] -= 1
+  puts "cols now #{$config[:cols]}" if $config[:verbose]
 end
 
 puts "rows: #{$config[:rows]}, cols: #{$config[:cols]}"
@@ -152,8 +174,9 @@ cards_per_page = $config[:rows] * $config[:cols]
 puts "Cards per page: #{cards_per_page}"
 
 
-card_width = (page_width_pt / $config[:cols]).floor
-card_height = (card_width / ratio).floor
+
+
+puts "card height: #{pt2in(card_height)} in, card width: #{pt2in(card_width)} in" if $config[:verbose]
 
 cards = ((1..78).collect {|card_number| [card_number] * $config[:dups]}).flatten
 
@@ -173,7 +196,7 @@ cards.each_with_index do |card_number, card_index|
   r = card_on_page / $config[:cols]
   c = card_on_page % $config[:cols]
 
-  pdf.image(card, at: [card_width * c, card_height * (r + 1)], width: card_width, height: card_height)
+  pdf.image(card, at: [card_width * c + border, card_height * (r + 1) + border], width: card_width, height: card_height)
 
   if card_on_page == cards_per_page - 1 # is the page full?
     pdf.start_new_page
