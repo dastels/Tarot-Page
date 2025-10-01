@@ -24,8 +24,14 @@ def process_args
     o.integer '-r', '--rows', 'number of rows of cards'
     o.string '-w', '--width', 'width of cards: in or mm'
     o.string '-h', '--height', 'height of cards: in or mm'
-    o.separator 'Only one of cols/rows/width/height can be specified, and one must be specified'
+#    o.separator 'Only one of cols/rows/width/height can be specified, and one must be specified'
+    o.string '-l', '--left_border', 'distance of cards from the left/right edge, in or mm' 
+    o.string '-b', '--bottom_border', 'distance of cards from the bottom/top edge, in or mm'
+    o.separator 'Either both or neither of left_border and right_border can be spcified'
     o.separator ''
+    o.string '--h_gap', 'distance between cards horizontally, in or mm (default 1mm)', default: '0mm'
+    o.string '--v_gap', 'distance between cards vertically, in or mm (default 1mm)', default: '0mm'
+    o.separator 'Both (or neither) of h_gap and v_gap must specified'
     o.separator 'other options:'
     o.bool '-v', '--verbose', 'show informational output', default: false
     o.on '--version', 'print the version number' do
@@ -83,7 +89,52 @@ else
   end
 end
 
-border = mm2pt(10)              # 10mm border on all sides
+# Compute borders
+if $config[:left_border].nil? && $config[:bottom_border].nil?
+  border_pt = mm2pt(10)              # 10mm border on all sides
+  left_border_pt = mm2pt(0)
+  bottom_border_pt = mm2pt(0)
+elsif !$config[:left_border].nil? && !$config[:bottom_border].nil?
+  border_pt = mm2pt(0)
+  left_border_matches = $config[:left_border].downcase.match(/(\d+)(in|mm)/)
+  left_border = left_border_matches[1].to_i
+  left_border_units = left_border_matches[2]
+  left_border_pt = left_border_units == 'in' ? in2pt(left_border) : mm2pt(left_border)
+
+  bottom_border_matches = $config[:bottom_border].downcase.match(/(\d+)(in|mm)/)
+  bottom_border = bottom_border_matches[1].to_i
+  bottom_border_units = bottom_border_matches[2]
+  bottom_border_pt = bottom_border_units == 'in' ? in2pt(bottom_border) : mm2pt(bottom_border)
+else 
+    puts 'Either both borders must be specified, or neither'
+    exit
+end
+
+# Compute gaps between cards
+horizontal_gap_pt = vertical_gap_pt = mm2pt(0)
+if $config[:h_gap] && $config[:v_gap]
+  horizontal_gap_matches = $config[:h_gap].downcase.match(/(\d+)(in|mm)/)
+  if horizontal_gap_matches
+    horizontal_gap = horizontal_gap_matches[1].to_i
+    horizontal_gap_units = horizontal_gap_matches[2]
+    horizontal_gap_pt = horizontal_gap_units == 'in' ? in2pt(horizontal_gap) : mm2pt(horizontal_gap)
+  else
+    horizontal_gap_pt = mm2pt(0)
+  end
+
+  vertical_gap_matches = $config[:v_gap].downcase.match(/(\d+)(in|mm)/)
+  if vertical_gap_matches
+    vertical_gap = vertical_gap_matches[1].to_i
+    vertical_gap_units = vertical_gap_matches[2]
+    vertical_gap_pt = vertical_gap_units == 'in' ? in2pt(vertical_gap) : mm2pt(vertical_gap)
+  else
+    vertical_gap_pt = mm2pt(0)
+  end
+elsif $config[:h_gap] || $config[:v_gap]
+    puts 'Either both gaps must be specified, or neither'
+    exit
+end
+
 
 puts "Page size: #{page_width_pt}x#{page_height_pt}" if $config[:verbose]
 pdf = Prawn::Document.new(page_size: [page_width_pt, page_height_pt], margin: 0)
@@ -98,47 +149,78 @@ puts "Card image width: #{card_image.width}px, Card image height: #{card_image.h
 
 # compute rows & columns
 
-number_specified = [:rows, :cols, :width, :height].inject(0) {|count, sym| count + ($config[sym].nil? ? 0 : 1)}
+have_rows =  !$config[:rols].nil?
+have_cols =  !$config[:cols].nil?
+have_width =  !$config[:width].nil?
+have_height =  !$config[:height].nil?
 
-if $config[:verbose]
-  puts "Card grid specifications:"
-  [:rows, :cols, :width, :height].each {|sym| puts "  #{sym.to_s}: #{$config[sym].nil? ? 'nil' : $config[sym]}" }
+if have_rows || have_cols
+  if have_rows && have_cols
+    puts 'Must specify only one of rows/cols'
+    exit
+  else
+   puts "#{$config[:rows]} rows - #{$config[:cols]} cols" if $config[:verbose]
+  end    
+elsif have_height || have_width
+   puts "#{$config[:width]} width - #{$config[:height]} height" if $config[:verbose]  
+else
+  puts 'Must specify rows/cols/width/height'
+  exit
 end
+# number_specified = [:rows, :cols, :width, :height].inject(0) {|count, sym| count + ($config[sym].nil? ? 0 : 1)}
 
-if number_specified == 0
-  puts 'Must specify one of rows/cols/width/height'
-  exit
-elsif number_specified > 1
-  puts 'Must specify only one of rows/cols/width/height'
-  exit
-end
+# if $config[:verbose]
+#   puts "Card grid specifications:"
+#   [:rows, :cols, :width, :height].each {|sym| puts "  #{sym.to_s}: #{$config[sym].nil? ? 'nil' : $config[sym]}" }
+# end
+
+# if number_specified == 0
+#   puts 'Must specify one of rows/cols/width/height'
+#   exit
+# elsif number_specified > 1
+#   puts 'Must specify only one of rows/cols/width/height'
+#   exit
+# end
 
 # process card width or height to get columns or rows
 
 if !$config[:width].nil?
-  matches = $config[:width].downcase.match(/(\d+)(in|mm)?/)
+  matches = $config[:width].downcase.match(/(\d+\.?\d*)(in|mm)?/)
   if matches.nil?
     puts "Bad card width: #{$config[:width]}"
     exit
   else
-    width = matches[1].to_i
+    width = matches[1].to_f
     width_unit = matches[2]
     card_width_pt = width_unit == 'in' ? in2pt(width) : mm2pt(width)
     puts "Card width: #{card_width_pt}" if $config[:verbose]
-    $config[:cols] = (page_width_pt / card_width_pt).floor
-    puts "Computed columns: #{$config[:cols]}"
+    puts "------"  if $config[:verbose]
+    [:page_width_pt, :border_pt, :left_border_pt, :card_width_pt, :horizontal_gap_pt].each do | name |
+      puts "#{name.to_s} => #{eval(name.to_s)}" if $config[:verbose]
+    end
+    puts "------"  if $config[:verbose]
+    $config[:cols] = ((page_width_pt - (border_pt + left_border_pt)) / (card_width_pt + horizontal_gap_pt)).floor
+    puts "Computed columns: #{$config[:cols]}" if $config[:verbose]
   end
-elsif !$config[:height].nil?
-  matches = $config[:height].downcase.match(/(\d+)(in|mm)?/)
+end
+
+if !$config[:height].nil?
+  matches = $config[:height].downcase.match(/(\d+\.?\d*)(in|mm)?/)
   if matches.nil?
     puts "Bad card height: #{$config[:height]}"
     exit
   else
-    height = matches[1].to_i
+    height = matches[1].to_f
     height_unit = matches[2]
     card_height_pt = height_unit == 'in' ? in2pt(height) : mm2pt(height)
-    $config[:rows] = (page_height_pt / card_height_pt).floor
-    puts "card_height: #{card_height_pt} pt, rows: #{$config[:rows]}" if $config[:verbose]
+    puts "card_height: #{card_height_pt} pt" if $config[:verbose]
+    puts "------"  if $config[:verbose]
+    [:page_height_pt, :border_pt, :bottom_border_pt, :card_height_pt, :vertical_gap_pt].each do | name |
+      puts "#{name.to_s} => #{eval(name.to_s)}" if $config[:verbose]
+    end
+    puts "------"  if $config[:verbose]
+    $config[:rows] = ((page_height_pt - (border_pt + bottom_border_pt)) / (card_height_pt + vertical_gap_pt)).floor
+    puts "Computed rows: #{$config[:rows]}" if $config[:verbose]
   end
 end
 
@@ -153,14 +235,15 @@ end
 # card_width = (page_width_pt / $config[:cols]).floor
 # card_height = (card_width / ratio).floor
 
-card_height = (page_height_pt / $config[:rows]).floor
-card_width = (card_height * ratio).floor
+card_height_pt = (page_height_pt / $config[:rows]).floor if card_height_pt.nil?
+card_width_pt = (card_height * ratio).floor if card_width_pt.nil?
 
-while card_height * $config[:rows] > page_height_pt - (border * 2)
+# tweak the number of rows & columns
+while card_height_pt * $config[:rows] > page_height_pt - ((bottom_border_pt + border_pt) * 2)
   $config[:rows] -= 1
   puts "rows now #{$config[:rows]}" if $config[:verbose]
 end
-while card_width * $config[:cols] > page_width_pt - (border * 2)
+while card_width_pt * $config[:cols] > page_width_pt - ((left_border_pt + border_pt) * 2)
   $config[:cols] -= 1
   puts "cols now #{$config[:cols]}" if $config[:verbose]
 end
@@ -176,7 +259,8 @@ puts "Cards per page: #{cards_per_page}"
 
 
 
-puts "card height: #{pt2in(card_height)} in, card width: #{pt2in(card_width)} in" if $config[:verbose]
+puts "card height: #{pt2in(card_height_pt)} in, card width: #{pt2in(card_width_pt)} in" if $config[:verbose]
+puts "h gap: #{pt2mm(horizontal_gap_pt)} mm, v_gap: #{pt2mm(vertical_gap_pt)} mm" if $config[:verbose]
 
 cards = ((1..78).collect {|card_number| [card_number] * $config[:dups]}).flatten
 
@@ -196,7 +280,7 @@ cards.each_with_index do |card_number, card_index|
   r = card_on_page / $config[:cols]
   c = card_on_page % $config[:cols]
 
-  pdf.image(card, at: [card_width * c + border, card_height * (r + 1) + border], width: card_width, height: card_height)
+  pdf.image(card, at: [card_width_pt * c + border_pt + left_border_pt + (horizontal_gap_pt * c), card_height_pt * (r + 1) + border_pt + bottom_border_pt + (vertical_gap_pt * r)], width: card_width_pt, height: card_height_pt)
 
   if card_on_page == cards_per_page - 1 # is the page full?
     pdf.start_new_page
