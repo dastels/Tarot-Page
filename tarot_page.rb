@@ -48,9 +48,10 @@ def process_args
 end
 
 $config = process_args
+$config[:tarot] = $config[:tarot] + '_tarot' unless $config[:tarot].end_with?('tarot')
 
 def make_image_name(deck, card_number)
-  "./%s_images/%s-%04d.jpg" % [deck, deck, card_number]
+  "./Card_Images/%s_images/%s-%04d.jpg" % [deck, deck, card_number]
 end
 
 
