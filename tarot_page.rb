@@ -295,7 +295,7 @@ if card_on_page == -1           # if all pages are full, there'll be an empty on
 end
 
 # write the output file
-output_file = File.join($config[:dir], $config[:file].nil? ? "#{$config[:tarot]}-#{$config[:rows]}x#{$config[:cols]}-#{$config[:dups]}.pdf" : $config[:file])
+output_file = File.join($config[:dir], $config[:file].nil? ? "#{$config[:tarot]}-#{$config[:rows]}x#{$config[:cols]}-#{$config[:dups]}-#{$config[:page_size]}.pdf" : $config[:file])
 puts "Writing to #{output_file}" if $config[:verbose]
 
 pdf.render_file(output_file)
