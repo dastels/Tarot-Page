@@ -238,14 +238,18 @@ end
 # card_height = (card_width / ratio).floor
 
 card_height_pt = (page_height_pt / $config[:rows]).floor if card_height_pt.nil?
-card_width_pt = (card_height * ratio).floor if card_width_pt.nil?
+card_width_pt = (card_height_pt * ratio).floor if card_width_pt.nil?
 
-# tweak the number of rows & columns
-while card_height_pt * $config[:rows] > page_height_pt - ((bottom_border_pt + border_pt) * 2)
+# tweak the number of rows
+usable_page_height =  page_height_pt - ((bottom_border_pt + border_pt) * 2)
+while ((card_height_pt + vertical_gap_pt) * $config[:rows]) > usable_page_height
   $config[:rows] -= 1
   puts "rows now #{$config[:rows]}" if $config[:verbose]
 end
-while card_width_pt * $config[:cols] > page_width_pt - ((left_border_pt + border_pt) * 2)
+
+# tweak the number of columns
+usable_page_width = page_width_pt - ((left_border_pt + border_pt) * 2)
+while ((card_width_pt + horizontal_gap_pt) * $config[:cols]) > usable_page_width
   $config[:cols] -= 1
   puts "cols now #{$config[:cols]}" if $config[:verbose]
 end
