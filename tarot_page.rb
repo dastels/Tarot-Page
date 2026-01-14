@@ -168,20 +168,21 @@ else
   puts 'Must specify rows/cols/width/height'
   exit
 end
-# number_specified = [:rows, :cols, :width, :height].inject(0) {|count, sym| count + ($config[sym].nil? ? 0 : 1)}
 
-# if $config[:verbose]
-#   puts "Card grid specifications:"
-#   [:rows, :cols, :width, :height].each {|sym| puts "  #{sym.to_s}: #{$config[sym].nil? ? 'nil' : $config[sym]}" }
-# end
+number_specified = [:rows, :cols, :width, :height].inject(0) {|count, sym| count + ($config[sym].nil? ? 0 : 1)}
 
-# if number_specified == 0
-#   puts 'Must specify one of rows/cols/width/height'
-#   exit
-# elsif number_specified > 1
-#   puts 'Must specify only one of rows/cols/width/height'
-#   exit
-# end
+if $config[:verbose]
+  puts "Card grid specifications:"
+  [:rows, :cols, :width, :height].each {|sym| puts "  #{sym.to_s}: #{$config[sym].nil? ? 'nil' : $config[sym]}" }
+end
+
+if number_specified == 0
+  puts 'Must specify one of rows/cols/width/height'
+  exit
+elsif number_specified > 1
+  puts 'Must specify only one of rows/cols/width/height'
+  exit
+end
 
 # process card width or height to get columns or rows
 
